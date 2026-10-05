@@ -46,19 +46,38 @@ def _extract_download_url(webpage):
 class StreamtapeIE(InfoExtractor):
     IE_NAME = 'streamtape'
     IE_DESC = 'streamtape.* video/file'
-    _VALID_URL = r'https?://(?:www\.)?streamtape\.\w+/(?:v|e|d)/(?P<id>[\w-]+)'
+    # An optional trailing /<file-name> (e.g. /VishnuPriya.mp4) is ignored.
+    _VALID_URL = r'https?://(?:www\.)?streamtape\.\w+/(?:v|e)/(?P<id>[\w-]+)(?:/[^/?#]*)?'
 
     # TODO: add real, live URLs once extraction works. Streamtape content is
     # frequently taken down, so keep these up to date.
-    _TESTS = []
+    _TESTS = [
+        {
+            'url': 'https://streamtape.com/v/vLM7MDqR9rS4RXv',
+            'only_matching': True,
+        },
+        {
+            'url': 'https://streamtape.com/v/vLM7MDqR9rS4RXv/VishnuPriya.mp4',
+            'only_matching': True,
+        },
+        {
+            'url': 'https://streamtape.com/e/vLM7MDqR9rS4RXv',
+            'only_matching': True,
+        },
+        {
+            'url': 'https://streamtape.com/e/vLM7MDqR9rS4RXv/VishnuPriya.mp4',
+            'only_matching': True,
+        },
+    ]
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
-        # Normalise embed (/e/) and download (/d/) links to the canonical /v/ page.
-        page_url = f'https://streamtape.com/v/{video_id}'
+        # Normalise embed (/e/) links to the canonical /v/ page,
+        # dropping any trailing file name.
+        url = f'https://streamtape.com/v/{video_id}'
 
         webpage = self._download_webpage(
-            page_url, video_id, headers={**_BASE_HEADERS, 'Referer': 'https://streamtape.com/'},
+            url, video_id, headers={**_BASE_HEADERS, 'Referer': 'https://streamtape.com/'},
         )
 
         media_url = _extract_download_url(webpage)
@@ -77,5 +96,8 @@ class StreamtapeIE(InfoExtractor):
             'title': title,
             'url': media_url,
             'ext': ext,
-            'http_headers': {**_BASE_HEADERS, 'Referer': page_url},
+            # The page actually downloaded is the canonical /v/ URL; yt-dlp
+            # derives webpage_url_basename/webpage_url_domain from this.
+            'webpage_url': url,
+            'http_headers': {**_BASE_HEADERS, 'Referer': url},
         }

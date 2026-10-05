@@ -1,6 +1,6 @@
 # yt-dlp-streamtape
 
-A yt-dlp plugin adding native support for streamtape.* video pages (`/v/`, `/e/`, `/d/`).
+A yt-dlp plugin adding native support for streamtape.* video pages (`/v/`, `/e/`).
 
 > **Skeleton only.** The extractor is wired up but does not yet resolve download URLs.
 
@@ -38,7 +38,7 @@ Run with `--verbose` and check that the log shows `[streamtape]` rather than `[g
 ## Status
 
 - [x] Plugin package layout and `pyproject.toml`
-- [x] `StreamtapeIE` registered for `streamtape.*` `/v/`, `/e/`, `/d/` URLs
+- [x] `StreamtapeIE` registered for `streamtape.*` `/v/`, `/e/` URLs
 - [ ] Parse the download URL from the file page (`_extract_download_url`)
 - [ ] Add `_TESTS` with live URLs
 - [ ] Decide whether a playlist/account extractor is needed
