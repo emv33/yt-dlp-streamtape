@@ -27,21 +27,13 @@ The output should include `StreamtapeIE`.
 
 ## Usage
 
-Once implemented, use it like any other yt-dlp site:
+Download a video like any other yt-dlp site:
 
 ```bash
 yt-dlp https://streamtape.com/v/<id>/<name>
 ```
 
 Run with `--verbose` and check that the log shows `[streamtape]` rather than `[generic]`.
-
-## Status
-
-- [x] Plugin package layout and `pyproject.toml`
-- [x] `StreamtapeIE` registered for `streamtape.*` `/v/`, `/e/` URLs
-- [x] Deobfuscate the `get_video` URL from the page's anti-bot link script
-- [ ] Add `_TESTS` with live URLs
-- [ ] Decide whether a playlist/account extractor is needed
 
 ## Legal Notice
 
