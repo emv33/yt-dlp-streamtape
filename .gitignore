@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.cache/
+
+# Downloads
+*.part
+*.ytdl
+*.info.json
+
+# Config / secrets
+cookies.txt
+*cookies.txt
+.netrc
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
