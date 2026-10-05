@@ -2,7 +2,7 @@
 
 A yt-dlp plugin adding native support for streamtape.* video pages (`/v/`, `/e/`).
 
-> **Skeleton only.** The extractor is wired up but does not yet resolve download URLs.
+> Deobfuscates the `get_video` API URL from the page's anti-bot link script and reads the title from `vidconfig`.
 
 ## Installing
 
@@ -39,7 +39,7 @@ Run with `--verbose` and check that the log shows `[streamtape]` rather than `[g
 
 - [x] Plugin package layout and `pyproject.toml`
 - [x] `StreamtapeIE` registered for `streamtape.*` `/v/`, `/e/` URLs
-- [ ] Parse the download URL from the file page (`_extract_download_url`)
+- [x] Deobfuscate the `get_video` URL from the page's anti-bot link script
 - [ ] Add `_TESTS` with live URLs
 - [ ] Decide whether a playlist/account extractor is needed
 

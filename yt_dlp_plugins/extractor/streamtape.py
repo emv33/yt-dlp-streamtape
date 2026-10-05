@@ -1,3 +1,4 @@
+import json
 import re
 import urllib.parse
 
@@ -12,34 +13,92 @@ _BASE_HEADERS = {
     ),
 }
 
-_OG_TITLE_RE = re.compile(r'<meta\s+property="og:title"\s+content="([^"]*)"')
+_VIDCONFIG_RE = re.compile(r'var\s+vidconfig\s*=\s*(?P<config>\{.*?\});', re.DOTALL)
+_OG_TITLE_RE = re.compile(r'<meta[^>]*\b(?:property|name)=["\']og:title["\'][^>]*>')
+_CONTENT_ATTR_RE = re.compile(r'content=["\']([^"\']*)["\']')
 _TITLE_TAG_RE = re.compile(r'<title>(.*?)</title>', re.DOTALL)
-_TITLE_SUFFIX_RE = re.compile(r'\s*[\|\-]\s*Streamtape(?:\.com)?\s*$', re.IGNORECASE)
+_TITLE_SUFFIX_RE = re.compile(
+    r'\s*(?:[\|\-]\s*Streamtape(?:\.com)?|at\s+Streamtape\.com)\s*$', re.IGNORECASE)
+# The page prints the get_video URL inside hidden elements, then rewrites it
+# with inline JavaScript substring tricks (the plain HTML value holds a decoy
+# token). These regexes replay the string arithmetic to recover the real URL.
+_LINK_ASSIGNMENT_RE = re.compile(
+    r"""document\.getElementById\(['"](?P<elem>norobotlink|captchalink|ideoooolink)['"]\)
+        \.innerHTML\s*=\s*(?P<expr>[^;]+)""", re.VERBOSE)
+_LINK_EXPR_RE = re.compile(
+    r"""['"](?P<prefix>[^'"]*)['"]\s*\+\s*(?:['"]{2}\s*\+\s*)?\(\s*'
+        (?P<body>[^']*)'\s*\)(?P<subs>(?:\.substring\(\d+\))*)""", re.VERBOSE)
 
 
 def _strip_site_suffix(raw_title):
     return _TITLE_SUFFIX_RE.sub('', raw_title.strip())
 
 
-def _extract_title(webpage, fallback):
-    og_match = _OG_TITLE_RE.search(webpage)
-    if og_match:
-        return og_match.group(1)
+def _extract_vidconfig(webpage):
+    match = _VIDCONFIG_RE.search(webpage)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group('config'))
+    except ValueError:
+        return None
+
+
+def _extract_title(webpage, vidconfig, fallback):
+    showtitle = (vidconfig or {}).get('showtitle')
+    if showtitle:
+        return showtitle
+    og_tag = _OG_TITLE_RE.search(webpage)
+    if og_tag:
+        content = _CONTENT_ATTR_RE.search(og_tag.group(0))
+        if content:
+            return content.group(1)
     title_match = _TITLE_TAG_RE.search(webpage)
     if title_match:
         return _strip_site_suffix(title_match.group(1))
     return fallback
 
 
-def _extract_download_url(webpage):
+def _deobfuscate_link_expr(expr):
     """
-    TODO: Parse the direct media URL out of the file page.
+    Evaluate a link-building expression such as
+    '//streamtape.com/get_video?id' + ('xcd=...&token=...').substring(1).substring(2)
+    """
+    match = _LINK_EXPR_RE.search(expr)
+    if not match:
+        return None
+    body = match.group('body')
+    for skip in re.findall(r'\.substring\((\d+)\)', match.group('subs')):
+        body = body[int(skip):]
+    return match.group('prefix') + body
 
-    Streamtape builds the download link with inline JavaScript on the page
-    (the element is usually targeted by an id such as `robotlink`). Inspect a
-    live page with `--verbose` or curl and implement the parsing here.
-    Return the absolute URL, or None if it cannot be found.
+
+def _build_download_url(webpage, video_id):
     """
+    Recover the get_video API URL from the page's anti-bot link script.
+
+    The hidden norobotlink/captchalink elements hold the API URL only after
+    the inline JavaScript has run. Replay the .substring() arithmetic and
+    verify the resulting URL points at this video.
+    """
+    candidates = {}
+    for match in _LINK_ASSIGNMENT_RE.finditer(webpage):
+        candidates.setdefault(match.group('elem'), match.group('expr'))
+    for element in ('norobotlink', 'captchalink', 'ideoooolink'):
+        expr = candidates.get(element)
+        if not expr:
+            continue
+        link = _deobfuscate_link_expr(expr)
+        if not link:
+            continue
+        if link.startswith('//'):
+            link = 'https:' + link
+        elif link.startswith('/'):
+            # The page's player concatenates 'https:/' with these.
+            link = 'https:/' + link
+        parsed = urllib.parse.urlparse(link)
+        if urllib.parse.parse_qs(parsed.query).get('id') == [video_id]:
+            return link
     return None
 
 
@@ -49,8 +108,8 @@ class StreamtapeIE(InfoExtractor):
     # An optional trailing /<file-name> (e.g. /VishnuPriya.mp4) is ignored.
     _VALID_URL = r'https?://(?:www\.)?streamtape\.\w+/(?:v|e)/(?P<id>[\w-]+)(?:/[^/?#]*)?'
 
-    # TODO: add real, live URLs once extraction works. Streamtape content is
-    # frequently taken down, so keep these up to date.
+    # TODO: add a full live test (with info_dict) — Streamtape content is
+    # frequently taken down, so keep these URLs up to date.
     _TESTS = [
         {
             'url': 'https://streamtape.com/v/vLM7MDqR9rS4RXv',
@@ -80,15 +139,16 @@ class StreamtapeIE(InfoExtractor):
             url, video_id, headers={**_BASE_HEADERS, 'Referer': 'https://streamtape.com/'},
         )
 
-        media_url = _extract_download_url(webpage)
+        vidconfig = _extract_vidconfig(webpage)
+        media_url = _build_download_url(webpage, video_id)
         if not media_url:
             raise ExtractorError(
                 f'Could not find the download URL on Streamtape page {video_id!r} '
-                '(extractor not implemented yet, or the page structure changed)',
+                '(the page structure changed)',
                 expected=True,
             )
 
-        title = _extract_title(webpage, fallback=video_id)
+        title = _extract_title(webpage, vidconfig, fallback=video_id)
         ext = determine_ext(urllib.parse.urlparse(media_url).path, default_ext='mp4')
 
         return {
